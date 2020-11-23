@@ -22,7 +22,9 @@ class Geometry:
         :type vec: ndarray
         :param point_line: point on line
         :type point_line: ndarray
-        :param point_ext: external points
+        :param point_ext: external points{\bf b}$ and a vector ${\bf v}$ along the line. We could also start with two points ${\bf b}$ and ${\bf a}$ and take ${\bf v} = {\bf a} - {\bf b}$.
+
+
         :type point_ext: ndarray
 
         """
@@ -572,20 +574,37 @@ class ProceduralSlabGeometry(Geometry):
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
+        dims = atoms.cell.lengths()
+        ngrid1 = 64
+        ngrid2 = 64
+
         # calculate distance from particles to plane defined by normal and center
         distances = self.distance_point_plane(self.normal, self.point, positions)
-        # find the points on plane
+
         point_plane = positions + np.einsum('ij,kl->jkl', distances, self.normal)
-        # a loop is actually faster than an all-numpy implementation
-        # since pnoise3/snoise3 are written in C++
+
+        import matplotlib.pyplot as plt
+        from noise import snoise2, snoise3, pnoise3
         noises = np.empty(distances.shape)
-        for i in range(len(self.normal)):
-            for j, point in enumerate(point_plane[i]):
-                noises[j] = self.noise(*(point/self.scale), **self.kwargs) + \
-                            self.f(*point)
+        # for i in range(len(self.normal)):
+        #     for j, point in enumerate(point_plane[i]):
+        #         noises[j] = self.noise(*(point/self.scale), **self.kwargs) + \
+        #                     self.f(*point)
+        print (point_plane.shape)
+        plt.plot(point_plane[0])
+        plt.legend(['x', 'y', 'z'])
+        plt.show()
+
+        for i, atom in enumerate(atoms):
+            x, y, z = point_plane[0][i]
+            noises[i] = snoise2(x/self.scale, y/self.scale, **self.kwargs)
+            # noises[i] = snoise3(x/self.scale, y/self.scale, z/self.scale, **self.kwargs)
 
         noises = noises.flatten() * self.thickness_half
-        # for each atom, check if the assigned noise value is greater than
-        # the atom's distance from the plane
-        indices = np.all(distances.T < noises, axis=0)
+
+        indices = np.logical_and(0 < noises, distances.flatten() < self.thickness_half)
+
         return indices
+
+
+        #
