@@ -71,7 +71,7 @@ def create_bulk_crystal(name, size, round="up"):
     return myCrystal
 
 
-def carve_geometry(atoms, geometry, side="in", return_carved=False):
+def carve_geometry(atoms, geometry, side="in", return_carved=False, noise=False):
     """Delete atoms according to geometry.
 
     Arguments:
@@ -87,7 +87,10 @@ def carve_geometry(atoms, geometry, side="in", return_carved=False):
     if return_carved:
         atoms_copy = atoms.copy()
 
-    geometry_indices = geometry(atoms)
+    if noise:
+        geometry_indices, noises = geometry(atoms)
+    else:
+        geometry_indices = geometry(atoms)
 
     if side == "in":
         delete_indices = geometry_indices
@@ -99,10 +102,10 @@ def carve_geometry(atoms, geometry, side="in", return_carved=False):
     del atoms[delete_indices]
 
     if not return_carved:
-        return np.sum(delete_indices)
+        return np.sum(delete_indices), noises
     else:
         del atoms_copy[np.logical_not(delete_indices)]
-        return np.sum(delete_indices), atoms_copy
+        return np.sum(delete_indices), atoms_copy, noises
 
 
 def fetch_system_from_url(url, type_mapping=None):
@@ -111,7 +114,7 @@ def fetch_system_from_url(url, type_mapping=None):
     :param name: name of system to be retrieved
     :type name: string
     :param type_mapping: List of pairs of numbers mapping the atom type in the file from the online repository to an atom number. For example silica from an online repository of lammps data files will have Si and O as type 1 and 2, whereas the correct atomic numbers are 14 and 8
-    :type type_mapping: List of pair-like of integers. 
+    :type type_mapping: List of pair-like of integers.
 
 
     Returns
@@ -145,7 +148,7 @@ def fetch_prepared_system(name, type_mapping=None):
     :param name: name of system to be retrieved
     :type name: string
     :param type_mapping: List of pairs of numbers mapping the atom type in the file from the online repository to an atom number. For example silica from an online repository of lammps data files will have Si and O as type 1 and 2, whereas the correct atomic numbers are 14 and 8
-    :type type_mapping: List of pair-like of integers. 
+    :type type_mapping: List of pair-like of integers.
 
 
     Returns
@@ -157,11 +160,11 @@ def fetch_prepared_system(name, type_mapping=None):
 
 def read_data(filename, type_mapping=None, style="atomic"):
     """Read a lammps data file into an ase atoms object.
-    
-    :param filename: path to the lammps data file 
-    :type filename: string 
+
+    :param filename: path to the lammps data file
+    :type filename: string
     :param type_mapping: List of pairs of numbers mapping the atom type in the file from the online repository to an atom number. For example silica from an online repository of lammps data files will have Si and O as type 1 and 2, whereas the correct atomic numbers are 14 and 8
-    :type type_mapping: List of pair-like of integers. 
+    :type type_mapping: List of pair-like of integers.
 
     :returns: ase.Atoms object with the system
     """

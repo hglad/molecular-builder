@@ -1,5 +1,6 @@
 import numpy as np
 from ase import Atom
+from noise import snoise2, snoise3, snoise4
 
 class Geometry:
     """Base class for geometries."""
@@ -536,34 +537,57 @@ class ProceduralSurfaceGeometry(Geometry):
 
 
 class ProceduralSlabGeometry(Geometry):
-    """Creates procedural noise inside a structure defined by a point, a normal
+    """Creates procedural noise on a surface defined by a point, a normal
     vector and a thickness.
+    :param point: an equilibrium point of noisy surface
+    :type point: array_like
+    :param normal: normal vector of noisy surface, surface is carved out
+                   in the poiting direction
+    :type normal: array_like
+    :param thickness: thickness of noise area
+    :type thickness: float
+    :param scale: scale of noise structures
+    :type scale: float
+    :param method: noise method, either 'simplex' or 'perlin'
+    :type method: str
+    :param f: arbitrary R^3 => R function to be added to the noise
+    :type f: func
+    :param threshold: define a threshold to define two-level surface by noise
+    :type threshold: float
+    :param pbc: define at what lengths the noise should repeat
+    :type pbc: array_like
+    :param angle: angle of triclinic surface given in degrees
+    :type angle: float
     """
 
-    def __init__(self,
-                 point,
-                 normal,
-                 thickness,
-                 scale=100,
-                 method='simplex',
-                 f=lambda x, y, z: 0,
-                 **kwargs):
-
+    def __init__(self, point, normal, thickness, scale=100, seed=0, method='perlin',
+                 f=lambda x, y, z: 0, threshold=None, pbc=None, angle=90, **kwargs):
         assert len(point) == len(normal), \
             "Number of given points and normal vectors have to be equal"
-
-        from noise import snoise3, pnoise3
         if method == "simplex":
-            self.noise = snoise3
+            self.noise = snoise4
         elif method == "perlin":
-            self.noise = pnoise3
+            self.noise = pnoise2
 
+        if type(scale) is list or type(scale) is tuple:
+            scale = np.asarray(scale)
+
+        if pbc is not None:
+            pbc = np.asarray(pbc)
+            repeat = np.rint(pbc / scale).astype(int)
+            kwargs['repeatx'], kwargs['repeaty'], kwargs['repeatz'] = repeat
+            if np.sum(np.remainder(pbc, scale)) > 0.01:
+                raise ValueError(
+                    "Scale needs to be set such that length/scale=int")
+        self.seed = seed
         self.point = np.atleast_2d(point)
         normal = np.atleast_2d(normal)
         self.normal = normal / np.linalg.norm(normal, axis=1)[:, np.newaxis]
-        self.thickness_half = thickness / 2
+        self.thickness = thickness
         self.scale = scale
         self.f = f
+        self.threshold = threshold
+        self.angle = angle
         self.kwargs = kwargs
 
     def packmol_structure(self, number, side):
@@ -574,37 +598,36 @@ class ProceduralSlabGeometry(Geometry):
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
-        dims = atoms.cell.lengths()
-        ngrid1 = 64
-        ngrid2 = 64
-
+        
         # calculate distance from particles to plane defined by normal and center
-        distances = self.distance_point_plane(self.normal, self.point, positions)
+        dist = self.distance_point_plane(
+            self.normal, self.point, positions)
+        # find the points on plane
+        point_plane = positions + \
+            np.einsum('ij,kl->jkl', dist, self.normal)
 
-        point_plane = positions + np.einsum('ij,kl->jkl', distances, self.normal)
+        # a loop is actually faster than an all-numpy implementation
+        # since pnoise3/snoise3 are written in C++
+        noises = np.empty(dist.shape)
+        for i in range(len(self.normal)):
+            for j, point in enumerate(point_plane[i]):
+                point[0] += point[1] * np.cos(np.deg2rad(self.angle))
+                noises[j] = self.f(*point)
+                point *= (self.normal.flatten()-1)*(-1)  # flip 0s and 1s
+                # point *= [self.normal.flatten() != 1][0]
 
-        import matplotlib.pyplot as plt
-        from noise import snoise2, snoise3, pnoise3
-        noises = np.empty(distances.shape)
-        # for i in range(len(self.normal)):
-        #     for j, point in enumerate(point_plane[i]):
-        #         noises[j] = self.noise(*(point/self.scale), **self.kwargs) + \
-        #                     self.f(*point)
-        print (point_plane.shape)
-        plt.plot(point_plane[0])
-        plt.legend(['x', 'y', 'z'])
-        plt.show()
+                noise_val = self.noise(
+                    point[0] / self.scale, point[1] / self.scale, point[2] / self.scale, self.seed, **self.kwargs)
+                if self.threshold is None:
+                    noises[j] += (noise_val + 1) / 2
+                else:
+                    noises[j] += noise_val > self.threshold
 
-        for i, atom in enumerate(atoms):
-            x, y, z = point_plane[0][i]
-            noises[i] = snoise2(x/self.scale, y/self.scale, **self.kwargs)
-            # noises[i] = snoise3(x/self.scale, y/self.scale, z/self.scale, **self.kwargs)
+        noises = noises.flatten() * self.thickness
 
-        noises = noises.flatten() * self.thickness_half
+        indices = np.logical_and(0 < noises, dist.flatten() < self.thickness / 2)
 
-        indices = np.logical_and(0 < noises, distances.flatten() < self.thickness_half)
-
-        return indices
+        return indices, noises
 
 
         #
