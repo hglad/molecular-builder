@@ -598,7 +598,8 @@ class ProceduralSlabGeometry(Geometry):
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
-        
+        cell = atoms.cell
+        lx, ly, lz = cell.lengths()
         # calculate distance from particles to plane defined by normal and center
         dist = self.distance_point_plane(
             self.normal, self.point, positions)
@@ -606,8 +607,57 @@ class ProceduralSlabGeometry(Geometry):
         point_plane = positions + \
             np.einsum('ij,kl->jkl', dist, self.normal)
 
-        # a loop is actually faster than an all-numpy implementation
-        # since pnoise3/snoise3 are written in C++
+        # Get dimensions for grid
+        normal_inv = (self.normal.flatten()-1)*(-1)
+
+        xmax = np.max(positions[:,0]*normal_inv[0])
+        ymax = np.max(positions[:,1]*normal_inv[1])
+        zmax = np.max(positions[:,2]*normal_inv[2])
+        # print (xmax, ymax, zmax)
+        # print (lx, ly, lz)
+
+        # Determine which dimension to use for constructing grid
+        max_values = np.array([xmax, ymax, zmax])  # one max value should be 0
+        dim_args = np.argsort(max_values)
+        print (dim_args)
+        dims = np.sort(reduced[dim_args])     # dims[0] should be 0
+        dims = []
+        l1 = dims[1]
+        l2 = dims[2]
+        n1 = int(l1)
+        n2 = int(l2)
+
+        grid1 = np.linspace(0, l1, n1)
+        grid2 = np.linspace(0, l2, n2)
+        noise_grid = np.zeros((n1, n2))
+
+        # Generate discrete grid for mapping noise values to atoms
+        for i, x in enumerate(grid1):
+            for j, y in enumerate(grid2):
+                noise_val = self.noise(x / self.scale, y / self.scale, 0, self.seed, **self.kwargs)
+                # noise_grid[i,j] = self.f(*point)
+
+                if self.threshold is None:
+                    noise_grid[i,j] += (noise_val + 1) / 2
+                else:
+                    noise_grid[i,j] += noise_val > self.threshold
+
+        # Map noise values onto individual atoms using the predefined grid
+        noises = np.empty(dist.shape)
+        for k, atom in enumerate(atoms):
+            x = positions[k][dim_args[1]]
+            y = positions[k][dim_args[2]]
+            x_i = np.argmin(abs(x - grid1))
+            y_i = np.argmin(abs(y - grid2))
+
+            noises[k] = noise_grid[x_i, y_i]
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.imshow(noise_grid, origin='lower')
+        plt.colorbar()
+        # plt.show()
+        """
         noises = np.empty(dist.shape)
         for i in range(len(self.normal)):
             for j, point in enumerate(point_plane[i]):
@@ -622,6 +672,7 @@ class ProceduralSlabGeometry(Geometry):
                     noises[j] += (noise_val + 1) / 2
                 else:
                     noises[j] += noise_val > self.threshold
+        """
 
         noises = noises.flatten() * self.thickness
 
