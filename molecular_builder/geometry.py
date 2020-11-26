@@ -620,8 +620,8 @@ class ProceduralSlabGeometry(Geometry):
         max_values = np.array([xmax, ymax, zmax])  # one max value should be 0
         dim_args = np.argsort(max_values)
         print (dim_args)
-        dims = np.sort(reduced[dim_args])     # dims[0] should be 0
-        dims = []
+        dims = np.sort(max_values[dim_args])     # dims[0] should be 0
+
         l1 = dims[1]
         l2 = dims[2]
         n1 = int(l1)
@@ -654,7 +654,7 @@ class ProceduralSlabGeometry(Geometry):
 
         import matplotlib.pyplot as plt
         plt.figure()
-        plt.imshow(noise_grid, origin='lower')
+        plt.imshow(noise_grid.T, origin='lower')
         plt.colorbar()
         # plt.show()
         """
