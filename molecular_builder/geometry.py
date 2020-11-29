@@ -613,8 +613,6 @@ class ProceduralSlabGeometry(Geometry):
         xmax = np.max(positions[:,0]*normal_inv[0])
         ymax = np.max(positions[:,1]*normal_inv[1])
         zmax = np.max(positions[:,2]*normal_inv[2])
-        # print (xmax, ymax, zmax)
-        # print (lx, ly, lz)
 
         # Determine which dimension to use for constructing grid
         max_values = np.array([xmax, ymax, zmax])  # one max value should be 0
@@ -653,9 +651,6 @@ class ProceduralSlabGeometry(Geometry):
             noises[k] = noise_grid[x_i, y_i]
 
         import matplotlib.pyplot as plt
-        plt.figure()
-        plt.imshow(noise_grid.T, origin='lower')
-        plt.colorbar()
         # plt.show()
         """
         noises = np.empty(dist.shape)
@@ -678,7 +673,7 @@ class ProceduralSlabGeometry(Geometry):
 
         indices = np.logical_and(0 < noises, dist.flatten() < self.thickness / 2)
 
-        return indices, noises
+        return indices, noise_grid
 
 
         #

@@ -87,6 +87,7 @@ def carve_geometry(atoms, geometry, side="in", return_carved=False, noise=False)
     if return_carved:
         atoms_copy = atoms.copy()
 
+    noises = []
     if noise:
         geometry_indices, noises = geometry(atoms)
     else:
