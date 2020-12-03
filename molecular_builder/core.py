@@ -71,7 +71,7 @@ def create_bulk_crystal(name, size, round="up"):
     return myCrystal
 
 
-def carve_geometry(atoms, geometry, side="in", return_carved=False, noise=False):
+def carve_geometry(atoms, geometry, side="in", return_carved=False, return_grid=False):
     """Delete atoms according to geometry.
 
     Arguments:
@@ -83,15 +83,15 @@ def carve_geometry(atoms, geometry, side="in", return_carved=False, noise=False)
         Number of deleted atoms
         Optionally an atoms object containing the atoms that were carved away
     """
-
+    noise_grid = None
     if return_carved:
         atoms_copy = atoms.copy()
 
-    noises = []
-    if noise:
-        geometry_indices, noises = geometry(atoms)
+    returned = geometry(atoms)
+    if len(returned) > 1:
+        geometry_indices, noise_grid = returned
     else:
-        geometry_indices = geometry(atoms)
+        geometry_indices = returned
 
     if side == "in":
         delete_indices = geometry_indices
@@ -102,11 +102,16 @@ def carve_geometry(atoms, geometry, side="in", return_carved=False, noise=False)
 
     del atoms[delete_indices]
 
-    if not return_carved:
-        return np.sum(delete_indices), noises
+    if return_carved:
+        if return_grid:
+            return np.sum(delete_indices), atoms_copy, noise_grid
+        else:
+            return np.sum(delete_indices), atoms_copy
     else:
-        del atoms_copy[np.logical_not(delete_indices)]
-        return np.sum(delete_indices), atoms_copy, noises
+        if return_grid:
+            return np.sum(delete_indices), noise_grid
+        else:
+            return np.sum(delete_indices)
 
 
 def fetch_system_from_url(url, type_mapping=None):

@@ -565,7 +565,7 @@ class ProceduralSlabGeometry(Geometry):
         assert len(point) == len(normal), \
             "Number of given points and normal vectors have to be equal"
         if method == "simplex":
-            self.noise = snoise4
+            self.noise = snoise2
         elif method == "perlin":
             self.noise = pnoise2
 
@@ -617,13 +617,14 @@ class ProceduralSlabGeometry(Geometry):
         # Determine which dimension to use for constructing grid
         max_values = np.array([xmax, ymax, zmax])  # one max value should be 0
         dim_args = np.argsort(max_values)
-        print (dim_args)
         dims = np.sort(max_values[dim_args])     # dims[0] should be 0
 
         l1 = dims[1]
         l2 = dims[2]
-        n1 = int(l1)
-        n2 = int(l2)
+        # n1 = int(l1)
+        # n2 = int(l2)
+        n1 = 50
+        n2 = 100
 
         grid1 = np.linspace(0, l1, n1)
         grid2 = np.linspace(0, l2, n2)
@@ -632,7 +633,7 @@ class ProceduralSlabGeometry(Geometry):
         # Generate discrete grid for mapping noise values to atoms
         for i, x in enumerate(grid1):
             for j, y in enumerate(grid2):
-                noise_val = self.noise(x / self.scale, y / self.scale, 0, self.seed, **self.kwargs)
+                noise_val = self.noise(x/self.scale, y/self.scale, base=self.seed,  **self.kwargs)
                 # noise_grid[i,j] = self.f(*point)
 
                 if self.threshold is None:
@@ -650,8 +651,7 @@ class ProceduralSlabGeometry(Geometry):
 
             noises[k] = noise_grid[x_i, y_i]
 
-        import matplotlib.pyplot as plt
-        # plt.show()
+        # import matplotlib.pyplot as plt
         """
         noises = np.empty(dist.shape)
         for i in range(len(self.normal)):
@@ -674,6 +674,5 @@ class ProceduralSlabGeometry(Geometry):
         indices = np.logical_and(0 < noises, dist.flatten() < self.thickness / 2)
 
         return indices, noise_grid
-
 
         #
