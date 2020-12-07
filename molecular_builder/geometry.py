@@ -1,6 +1,7 @@
 import numpy as np
 from ase import Atom
 from noise import snoise2, snoise3, snoise4
+from noise import perlin
 
 class Geometry:
     """Base class for geometries."""
@@ -576,9 +577,11 @@ class ProceduralSlabGeometry(Geometry):
             pbc = np.asarray(pbc)
             repeat = np.rint(pbc / scale).astype(int)
             kwargs['repeatx'], kwargs['repeaty'], kwargs['repeatz'] = repeat
+            print (repeat)
             if np.sum(np.remainder(pbc, scale)) > 0.01:
                 raise ValueError(
                     "Scale needs to be set such that length/scale=int")
+
         self.seed = seed
         self.point = np.atleast_2d(point)
         normal = np.atleast_2d(normal)
@@ -600,6 +603,8 @@ class ProceduralSlabGeometry(Geometry):
         positions = atoms.get_positions()
         cell = atoms.cell
         lx, ly, lz = cell.lengths()
+
+
         # calculate distance from particles to plane defined by normal and center
         dist = self.distance_point_plane(
             self.normal, self.point, positions)
@@ -621,8 +626,8 @@ class ProceduralSlabGeometry(Geometry):
 
         l1 = dims[1]
         l2 = dims[2]
-        # n1 = int(l1)
-        # n2 = int(l2)
+        self.kwargs['repeatx'], self.kwargs['repeaty'] = l1/self.scale, l2/self.scale
+
         n1 = 50
         n2 = 100
 
@@ -630,10 +635,13 @@ class ProceduralSlabGeometry(Geometry):
         grid2 = np.linspace(0, l2, n2)
         noise_grid = np.zeros((n1, n2))
 
+        Noise = perlin.TileableNoise()
+        Noise.randomize()
         # Generate discrete grid for mapping noise values to atoms
         for i, x in enumerate(grid1):
             for j, y in enumerate(grid2):
-                noise_val = self.noise(x/self.scale, y/self.scale, base=self.seed,  **self.kwargs)
+                noise_val = Noise.noise3(x/self.scale, y/self.scale, 0, repeatx=n1, repeaty=n2, repeatz=1000)
+                # noise_val = self.noise(x/self.scale, y/self.scale, base=self.seed, **self.kwargs)
                 # noise_grid[i,j] = self.f(*point)
 
                 if self.threshold is None:
@@ -652,6 +660,7 @@ class ProceduralSlabGeometry(Geometry):
             noises[k] = noise_grid[x_i, y_i]
 
         # import matplotlib.pyplot as plt
+
         """
         noises = np.empty(dist.shape)
         for i in range(len(self.normal)):
