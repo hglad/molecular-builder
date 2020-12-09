@@ -1,7 +1,6 @@
 import numpy as np
 from ase import Atom
-from noise import snoise2, snoise3, snoise4
-from noise import perlin
+from noise import snoise2, randomize
 
 class Geometry:
     """Base class for geometries."""
@@ -601,9 +600,6 @@ class ProceduralSlabGeometry(Geometry):
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
-        cell = atoms.cell
-        lx, ly, lz = cell.lengths()
-
 
         # calculate distance from particles to plane defined by normal and center
         dist = self.distance_point_plane(
@@ -626,23 +622,27 @@ class ProceduralSlabGeometry(Geometry):
 
         l1 = dims[1]
         l2 = dims[2]
+
+        # Set periodic noise
         self.kwargs['repeatx'], self.kwargs['repeaty'] = l1/self.scale, l2/self.scale
 
         n1 = 50
         n2 = 100
-
         grid1 = np.linspace(0, l1, n1)
         grid2 = np.linspace(0, l2, n2)
         noise_grid = np.zeros((n1, n2))
 
-        Noise = perlin.TileableNoise()
-        Noise.randomize()
+        # Noise = perlin.SimplexNoise()
+        # Noise.randomize()
+        randomize(4096, self.seed)
+        self.noise = snoise2
+
         # Generate discrete grid for mapping noise values to atoms
         for i, x in enumerate(grid1):
             for j, y in enumerate(grid2):
-                noise_val = Noise.noise3(x/self.scale, y/self.scale, 0, repeatx=n1, repeaty=n2, repeatz=1000)
-                # noise_val = self.noise(x/self.scale, y/self.scale, base=self.seed, **self.kwargs)
+                # noise_val = Noise.noise2(x/self.scale, y/self.scale)
                 # noise_grid[i,j] = self.f(*point)
+                noise_val = self.noise(x/self.scale, y/self.scale, **self.kwargs)
 
                 if self.threshold is None:
                     noise_grid[i,j] += (noise_val + 1) / 2
@@ -654,29 +654,10 @@ class ProceduralSlabGeometry(Geometry):
         for k, atom in enumerate(atoms):
             x = positions[k][dim_args[1]]
             y = positions[k][dim_args[2]]
+
             x_i = np.argmin(abs(x - grid1))
             y_i = np.argmin(abs(y - grid2))
-
             noises[k] = noise_grid[x_i, y_i]
-
-        # import matplotlib.pyplot as plt
-
-        """
-        noises = np.empty(dist.shape)
-        for i in range(len(self.normal)):
-            for j, point in enumerate(point_plane[i]):
-                point[0] += point[1] * np.cos(np.deg2rad(self.angle))
-                noises[j] = self.f(*point)
-                point *= (self.normal.flatten()-1)*(-1)  # flip 0s and 1s
-                # point *= [self.normal.flatten() != 1][0]
-
-                noise_val = self.noise(
-                    point[0] / self.scale, point[1] / self.scale, point[2] / self.scale, self.seed, **self.kwargs)
-                if self.threshold is None:
-                    noises[j] += (noise_val + 1) / 2
-                else:
-                    noises[j] += noise_val > self.threshold
-        """
 
         noises = noises.flatten() * self.thickness
 
